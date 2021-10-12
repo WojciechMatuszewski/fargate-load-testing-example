@@ -4,17 +4,23 @@ import * as ecs from "@aws-cdk/aws-ecs";
 import * as ec2 from "@aws-cdk/aws-ec2";
 import { join } from "path";
 
-export class LoadTestRunner extends cdk.NestedStack {
-  constructor(scope: cdk.Construct, id: string, props?: cdk.NestedStackProps) {
-    super(scope, id, props);
+export class LoadTestRunner extends cdk.Construct {
+  public cluster: ecs.Cluster;
+  public taskDefinition: ecs.TaskDefinition;
+
+  constructor(scope: cdk.Construct, id: string) {
+    super(scope, id);
 
     const defaultVPC = ec2.Vpc.fromLookup(this, "defaultVPC", {
       isDefault: true
     });
 
-    const cluster = new ecs.Cluster(this, "cluster", { vpc: defaultVPC });
+    this.cluster = new ecs.Cluster(this, "cluster", { vpc: defaultVPC });
 
-    const taskDefinition = new ecs.FargateTaskDefinition(
+    /**
+     * How do I configure logging?
+     */
+    this.taskDefinition = new ecs.FargateTaskDefinition(
       this,
       "taskDefinition",
       {
@@ -22,12 +28,18 @@ export class LoadTestRunner extends cdk.NestedStack {
         cpu: 256
       }
     );
-
-    taskDefinition.addContainer("runnerContainer", {
+    /**
+     * Replacement type updates not supported on stack with disable-rollback.
+     */
+    this.taskDefinition.addContainer("runnerContainer", {
       image: ecs.ContainerImage.fromAsset(
         join(__dirname, "../src/load-tester")
       ),
-      memoryLimitMiB: 512
+      memoryLimitMiB: 512,
+      logging: ecs.LogDriver.awsLogs({
+        mode: ecs.AwsLogDriverMode.NON_BLOCKING,
+        streamPrefix: "runner"
+      })
     });
   }
 }
