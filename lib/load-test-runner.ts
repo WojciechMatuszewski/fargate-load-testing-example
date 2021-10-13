@@ -7,6 +7,7 @@ import { join } from "path";
 export class LoadTestRunner extends cdk.Construct {
   public cluster: ecs.Cluster;
   public taskDefinition: ecs.TaskDefinition;
+  public containerDefinition: ecs.ContainerDefinition;
 
   constructor(scope: cdk.Construct, id: string) {
     super(scope, id);
@@ -17,9 +18,6 @@ export class LoadTestRunner extends cdk.Construct {
 
     this.cluster = new ecs.Cluster(this, "cluster", { vpc: defaultVPC });
 
-    /**
-     * How do I configure logging?
-     */
     this.taskDefinition = new ecs.FargateTaskDefinition(
       this,
       "taskDefinition",
@@ -28,18 +26,19 @@ export class LoadTestRunner extends cdk.Construct {
         cpu: 256
       }
     );
-    /**
-     * Replacement type updates not supported on stack with disable-rollback.
-     */
-    this.taskDefinition.addContainer("runnerContainer", {
-      image: ecs.ContainerImage.fromAsset(
-        join(__dirname, "../src/load-tester")
-      ),
-      memoryLimitMiB: 512,
-      logging: ecs.LogDriver.awsLogs({
-        mode: ecs.AwsLogDriverMode.NON_BLOCKING,
-        streamPrefix: "runner"
-      })
-    });
+
+    this.containerDefinition = this.taskDefinition.addContainer(
+      "runnerContainer",
+      {
+        image: ecs.ContainerImage.fromAsset(
+          join(__dirname, "../src/load-test-engine")
+        ),
+        memoryLimitMiB: 512,
+        logging: ecs.LogDriver.awsLogs({
+          mode: ecs.AwsLogDriverMode.NON_BLOCKING,
+          streamPrefix: "runner"
+        })
+      }
+    );
   }
 }

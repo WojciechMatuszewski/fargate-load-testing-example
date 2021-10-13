@@ -4,11 +4,13 @@ import * as ecs from "@aws-cdk/aws-ecs";
 import * as ec2 from "@aws-cdk/aws-ec2";
 import * as sfnTasks from "@aws-cdk/aws-stepfunctions-tasks";
 import * as sfn from "@aws-cdk/aws-stepfunctions";
+import * as iam from "@aws-cdk/aws-iam";
 import { join } from "path";
 
 interface LoadTestEngineProps {
   cluster: ecs.Cluster;
   taskDefinition: ecs.TaskDefinition;
+  containerDefinition: ecs.ContainerDefinition;
 }
 
 export class LoadTestEngine extends cdk.Construct {
@@ -16,14 +18,30 @@ export class LoadTestEngine extends cdk.Construct {
     super(scope, id);
 
     const runLoadTestTask = new sfnTasks.EcsRunTask(this, "runLoadTest", {
-      integrationPattern: sfn.IntegrationPattern.RUN_JOB,
+      integrationPattern: sfn.IntegrationPattern.WAIT_FOR_TASK_TOKEN,
       cluster: props.cluster,
       taskDefinition: props.taskDefinition,
       launchTarget: new sfnTasks.EcsFargateLaunchTarget(),
       /**
        * Required when run in the context of public-only VPC
        */
-      assignPublicIp: true
+      assignPublicIp: true,
+      containerOverrides: [
+        {
+          environment: [
+            {
+              name: "TASK_TOKEN",
+              value: sfn.JsonPath.stringAt("$$.Task.Token")
+            },
+
+            {
+              name: "BAR",
+              value: sfn.JsonPath.stringAt("$$.Task.Token")
+            }
+          ],
+          containerDefinition: props.containerDefinition
+        }
+      ]
     });
 
     const machineDefinition = runLoadTestTask.next(
@@ -33,5 +51,12 @@ export class LoadTestEngine extends cdk.Construct {
     const machine = new sfn.StateMachine(this, "machine", {
       definition: machineDefinition
     });
+
+    props.taskDefinition.addToTaskRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["states:SendTaskSuccess", "states:SendTaskFailure"],
+        resources: [machine.stateMachineArn]
+      })
+    );
   }
 }
