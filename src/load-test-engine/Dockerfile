@@ -7,10 +7,10 @@ WORKDIR /app
 RUN go install
 RUN go build -o main .
 
-FROM alpine
+FROM blazemeter/taurus
 
 RUN mkdir /app
 COPY --from=builder /app/main /app
 WORKDIR /app
 
-CMD [ "./main" ]
+ENTRYPOINT [ "./main" ]
