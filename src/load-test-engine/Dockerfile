@@ -5,12 +5,19 @@ COPY . /app
 
 WORKDIR /app
 RUN go install
-RUN go build -o main .
+
+# Required. Otherwise you will be presented with a weird error. Something about _linux.go something.
+ENV CGO_ENABLED=0
+RUN go build -o load-test-engine .
 
 FROM blazemeter/taurus
 
 RUN mkdir /app
-COPY --from=builder /app/main /app
+COPY --from=builder /app/load-test-engine /app/load-test-engine
+
 WORKDIR /app
 
-ENTRYPOINT [ "./main" ]
+RUN chmod 755 load-test-engine
+
+ENTRYPOINT []
+CMD [ "./load-test-engine" ]

@@ -36,4 +36,7 @@ Inspired by [this AWS solution](https://aws.amazon.com/solutions/implementations
 - You will not be able to get the output of your _AWS ECS_ task run via _AWS StepFunctions_ directly (understandable).
   To get the output back to your state machine, use the `sendTaskSuccess` method. Remember to use the `.waitForTaskToken` modifier on the task definition!
 
+- I wasted so much time trying to override the `ENTRYPOINT` property of the `blazemeter/taurus` property but the solution turned out to be very simple!
+  - All I had to do was to specify an empty array as `ENTRYPOINT` 🤦‍♂️
+
 https://docs.aws.amazon.com/solutions/latest/distributed-load-testing-on-aws/container-image.html

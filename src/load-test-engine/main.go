@@ -35,11 +35,13 @@ type LoadTest struct {
 }
 
 func main() {
+	fmt.Println("Starting the load test")
+
 	loadTest := LoadTest{
 		Execution: LoadTestExecution{
 			Concurrency: 1,
-			HoldFor:     "60s",
-			RampUp:      "30s",
+			HoldFor:     "1s",
+			RampUp:      "1s",
 			Scenario:    "sample",
 		},
 		Scenarios: map[string]LoadTestScenario{
@@ -55,6 +57,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	defer fd.Close()
 
 	err = json.NewEncoder(fd).Encode(loadTest)
 	if err != nil {
@@ -65,11 +68,11 @@ func main() {
 		"bzt",
 		"./config.json",
 	)
-	out, err := cmd.CombinedOutput()
-	fmt.Println(string(out))
+	out, err := cmd.Output()
 	if err != nil {
 		panic(err)
 	}
+	fmt.Println(string(out))
 }
 
 func notifySuccess() {
