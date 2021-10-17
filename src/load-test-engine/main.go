@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 
@@ -29,50 +30,94 @@ type LoadTestRequest struct {
 	URL    string `json:"url"`
 }
 
+type LoadTestReport struct {
+	Module        string `json:"module"`
+	Filename      string `json:"filename"`
+	SummaryLabels bool   `json:"summary"`
+	FailedLabels  bool   `json:"failed-labels"`
+	DumpXML       string `json:"dump-xml"`
+	Percentiles   bool   `json:"percentiles"`
+}
+
 type LoadTest struct {
-	Execution LoadTestExecution           `json:"execution"`
+	Execution []LoadTestExecution         `json:"execution"`
 	Scenarios map[string]LoadTestScenario `json:"scenarios"`
+	Reporting []LoadTestReport            `json:"reporting"`
 }
 
 func main() {
-	fmt.Println("Starting the load test")
+	fmt.Println("Starting")
 
-	loadTest := LoadTest{
-		Execution: LoadTestExecution{
-			Concurrency: 1,
-			HoldFor:     "1s",
-			RampUp:      "1s",
-			Scenario:    "sample",
+	ld := LoadTest{
+		Execution: []LoadTestExecution{
+			{
+				Concurrency: 1,
+				HoldFor:     "1s",
+				RampUp:      "1s",
+				Scenario:    "sample",
+			},
 		},
 		Scenarios: map[string]LoadTestScenario{
 			"sample": {
 				Requests: []LoadTestRequest{
-					{Label: "something", Method: "GET", URL: "https://webhook.site/5513a805-6831-4b1e-8f61-938c2e33c885"},
+					{Label: "load-test", Method: "GET", URL: "https://webhook.site/5513a805-6831-4b1e-8f61-938c2e33c885"},
 				},
+			},
+		},
+		Reporting: []LoadTestReport{
+			{
+				Module:        "final-stats",
+				Percentiles:   true,
+				FailedLabels:  true,
+				SummaryLabels: true,
+				DumpXML:       "./report.xml",
 			},
 		},
 	}
 
-	fd, err := os.Create("./config.json")
+	err := runLoadTest(ld)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println("Load test done. Getting the results")
+
+	fd, err := os.Open("./report.xml")
 	if err != nil {
 		panic(err)
 	}
 	defer fd.Close()
 
-	err = json.NewEncoder(fd).Encode(loadTest)
+	buf, err := ioutil.ReadAll(fd)
 	if err != nil {
 		panic(err)
+	}
+
+	fmt.Println(string(buf))
+}
+
+func runLoadTest(ld LoadTest) error {
+	fd, err := os.Create("./config.json")
+	if err != nil {
+		return err
+	}
+	defer fd.Close()
+
+	err = json.NewEncoder(fd).Encode(ld)
+	if err != nil {
+		return err
 	}
 
 	cmd := exec.Command(
 		"bzt",
 		"./config.json",
 	)
-	out, err := cmd.Output()
+	_, err = cmd.Output()
 	if err != nil {
-		panic(err)
+		return err
 	}
-	fmt.Println(string(out))
+
+	return nil
 }
 
 func notifySuccess() {
