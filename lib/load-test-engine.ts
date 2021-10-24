@@ -33,10 +33,9 @@ export class LoadTestEngine extends cdk.Construct {
               name: "TASK_TOKEN",
               value: sfn.JsonPath.stringAt("$$.Task.Token")
             },
-
             {
-              name: "BAR",
-              value: sfn.JsonPath.stringAt("$$.Task.Token")
+              name: "EXECUTION_ID",
+              value: sfn.JsonPath.stringAt("$$.Execution.Id")
             }
           ],
           containerDefinition: props.containerDefinition
