@@ -40,4 +40,17 @@ Inspired by [this AWS solution](https://aws.amazon.com/solutions/implementations
 
   - All I had to do was to specify an empty array as `ENTRYPOINT` 🤦‍♂️
 
+- How does one passes variables from SFN to the container?
+
+  - According to the [SFN documentation](https://docs.aws.amazon.com/step-functions/latest/dg/connect-ecs.html) one needs to use the `Overrides` parameter.
+  - For our use-case the `Environment` is the relevant parameter (lives within the `Overrides`).
+  - While the _environment variables_ are **not restricted in size by CFN, the SFN service imposes restrictions on size**.
+    > [CloudFormation] We do not enforce a size limit on the environment variables, but a large environment variables file might fill up the disk space.
+    > [Step Functions] A total of 8192 characters are allowed for overrides. This limit includes the JSON formatting characters of the override structure.
+
+- The _HTTP_ flavour of _Amazon API Gateway_ is not really usable with direct integrations. It seems to me like the HTTP API is only good for very simple Lambda APIS (which might or might not be a good usage of the service).
+
+  1. There is no way to transform the request
+  2. There is no way to transform the response body (other things like headers and status code are transformable)
+
 - How is the load spread between containers?

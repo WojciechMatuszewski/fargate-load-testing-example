@@ -3,7 +3,6 @@ package loadtest
 import (
 	"encoding/json"
 	"encoding/xml"
-	"fmt"
 	"os"
 	"os/exec"
 )
@@ -41,136 +40,105 @@ type data struct {
 }
 
 type xmlResult struct {
-	XMLName      xml.Name `xml:"FinalStatus"`
-	Text         string   `xml:",chardata"`
-	TestDuration string   `xml:"TestDuration"`
+	Text         string `xml:",chardata" json:"text,omitempty"`
+	TestDuration string `xml:"TestDuration" json:"testDuration,omitempty"`
 	Group        []struct {
-		Text       string `xml:",chardata"`
-		Label      string `xml:"label,attr"`
 		Throughput struct {
-			Text      string `xml:",chardata"`
-			AttrValue string `xml:"value,attr"`
-			Name      string `xml:"name"`
-			Value     string `xml:"value"`
-		} `xml:"throughput"`
+			Name  string `xml:"name" json:"name,omitempty"`
+			Value string `xml:"value" json:"value,omitempty"`
+		} `xml:"throughput" json:"throughput,omitempty"`
 		Concurrency struct {
-			Text      string `xml:",chardata"`
-			AttrValue string `xml:"value,attr"`
-			Name      string `xml:"name"`
-			Value     string `xml:"value"`
-		} `xml:"concurrency"`
+			Name  string `xml:"name" json:"name,omitempty"`
+			Value string `xml:"value" json:"value,omitempty"`
+		} `xml:"concurrency" json:"concurrency,omitempty"`
 		Succ struct {
-			Text      string `xml:",chardata"`
-			AttrValue string `xml:"value,attr"`
-			Name      string `xml:"name"`
-			Value     string `xml:"value"`
-		} `xml:"succ"`
+			Name  string `xml:"name" json:"name,omitempty"`
+			Value string `xml:"value" json:"value,omitempty"`
+		} `xml:"succ" json:"succ,omitempty"`
 		Fail struct {
-			Text      string `xml:",chardata"`
-			AttrValue string `xml:"value,attr"`
-			Name      string `xml:"name"`
-			Value     string `xml:"value"`
-		} `xml:"fail"`
+			Name  string `xml:"name" json:"name,omitempty"`
+			Value string `xml:"value" json:"value,omitempty"`
+		} `xml:"fail" json:"fail,omitempty"`
 		AvgRt struct {
-			Text      string `xml:",chardata"`
-			AttrValue string `xml:"value,attr"`
-			Name      string `xml:"name"`
-			Value     string `xml:"value"`
-		} `xml:"avg_rt"`
+			Name  string `xml:"name" json:"name,omitempty"`
+			Value string `xml:"value" json:"value,omitempty"`
+		} `xml:"avg_rt" json:"avgRt,omitempty"`
 		StdevRt struct {
-			Text      string `xml:",chardata"`
-			AttrValue string `xml:"value,attr"`
-			Name      string `xml:"name"`
-			Value     string `xml:"value"`
-		} `xml:"stdev_rt"`
+			Text  string `xml:",chardata" json:"text,omitempty"`
+			Value string `xml:"value" json:"value,omitempty"`
+		} `xml:"stdev_rt" json:"stdevRt,omitempty"`
 		AvgLt struct {
-			Text      string `xml:",chardata"`
-			AttrValue string `xml:"value,attr"`
-			Name      string `xml:"name"`
-			Value     string `xml:"value"`
-		} `xml:"avg_lt"`
+			Text  string `xml:",chardata" json:"text,omitempty"`
+			Value string `xml:"value" json:"value,omitempty"`
+		} `xml:"avg_lt" json:"avgLt,omitempty"`
 		AvgCt struct {
-			Text      string `xml:",chardata"`
-			AttrValue string `xml:"value,attr"`
-			Name      string `xml:"name"`
-			Value     string `xml:"value"`
-		} `xml:"avg_ct"`
+			Name  string `xml:"name" json:"name,omitempty"`
+			Value string `xml:"value" json:"value,omitempty"`
+		} `xml:"avg_ct" json:"avgCt,omitempty"`
 		Bytes struct {
-			Text      string `xml:",chardata"`
-			AttrValue string `xml:"value,attr"`
-			Name      string `xml:"name"`
-			Value     string `xml:"value"`
-		} `xml:"bytes"`
+			Name  string `xml:"name" json:"name,omitempty"`
+			Value string `xml:"value" json:"value,omitempty"`
+		} `xml:"bytes" json:"bytes,omitempty"`
 		Rc struct {
-			Text      string `xml:",chardata"`
-			AttrValue string `xml:"value,attr"`
-			Param     string `xml:"param,attr"`
-			Name      string `xml:"name"`
-			Value     string `xml:"value"`
-		} `xml:"rc"`
+			Param string `xml:"param,attr" json:"param,omitempty"`
+			Name  string `xml:"name" json:"name,omitempty"`
+			Value string `xml:"value" json:"value,omitempty"`
+		} `xml:"rc" json:"rc,omitempty"`
 		Perc []struct {
-			Text      string `xml:",chardata"`
-			AttrValue string `xml:"value,attr"`
-			Param     string `xml:"param,attr"`
-			Name      string `xml:"name"`
-			Value     string `xml:"value"`
-		} `xml:"perc"`
-	} `xml:"Group"`
+			Param string `xml:"param,attr" json:"param,omitempty"`
+			Name  string `xml:"name" json:"name,omitempty"`
+			Value string `xml:"value" json:"value,omitempty"`
+		} `xml:"perc" json:"perc,omitempty"`
+	} `xml:"Group" json:"group,omitempty"`
 }
 
-type JSONResult struct {
-	FinalStatus struct {
-		TestDuration string `json:"TestDuration"`
-		Group        []struct {
-			Throughput struct {
-				Name  string `json:"name"`
-				Value string `json:"value"`
-			} `json:"throughput"`
-			Concurrency struct {
-				Name  string `json:"name"`
-				Value string `json:"value"`
-			} `json:"concurrency"`
-			Succ struct {
-				Name  string `json:"name"`
-				Value string `json:"value"`
-			} `json:"succ"`
-			Fail struct {
-				Name  string `json:"name"`
-				Value string `json:"value"`
-			} `json:"fail"`
-			AvgRt struct {
-				Name  string `json:"name"`
-				Value string `json:"value"`
-			} `json:"avg_rt"`
-			StdevRt struct {
-				Name  string `json:"name"`
-				Value string `json:"value"`
-			} `json:"stdev_rt"`
-			AvgLt struct {
-				Name  string `json:"name"`
-				Value string `json:"value"`
-			} `json:"avg_lt"`
-			AvgCt struct {
-				Name  string `json:"name"`
-				Value string `json:"value"`
-			} `json:"avg_ct"`
-			Bytes struct {
-				Name  string `json:"name"`
-				Value string `json:"value"`
-			} `json:"bytes"`
-			Rc struct {
-				Name  string `json:"name"`
-				Value string `json:"value"`
-				Param string `json:"_param"`
-			} `json:"rc"`
-			Perc []struct {
-				Name  string `json:"name"`
-				Value string `json:"value"`
-				Param string `json:"_param"`
-			} `json:"perc"`
-			Label string `json:"_label"`
-		} `json:"Group"`
-	} `json:"FinalStatus"`
+type Result struct {
+	Throughput struct {
+		Name  string `xml:"name" json:"name,omitempty"`
+		Value string `xml:"value" json:"value,omitempty"`
+	} `xml:"throughput" json:"throughput,omitempty"`
+	Concurrency struct {
+		Name  string `xml:"name" json:"name,omitempty"`
+		Value string `xml:"value" json:"value,omitempty"`
+	} `xml:"concurrency" json:"concurrency,omitempty"`
+	Succ struct {
+		Name  string `xml:"name" json:"name,omitempty"`
+		Value string `xml:"value" json:"value,omitempty"`
+	} `xml:"succ" json:"succ,omitempty"`
+	Fail struct {
+		Name  string `xml:"name" json:"name,omitempty"`
+		Value string `xml:"value" json:"value,omitempty"`
+	} `xml:"fail" json:"fail,omitempty"`
+	AvgRt struct {
+		Name  string `xml:"name" json:"name,omitempty"`
+		Value string `xml:"value" json:"value,omitempty"`
+	} `xml:"avg_rt" json:"avgRt,omitempty"`
+	StdevRt struct {
+		Text  string `xml:",chardata" json:"text,omitempty"`
+		Value string `xml:"value" json:"value,omitempty"`
+	} `xml:"stdev_rt" json:"stdevRt,omitempty"`
+	AvgLt struct {
+		Text  string `xml:",chardata" json:"text,omitempty"`
+		Value string `xml:"value" json:"value,omitempty"`
+	} `xml:"avg_lt" json:"avgLt,omitempty"`
+	AvgCt struct {
+		Name  string `xml:"name" json:"name,omitempty"`
+		Value string `xml:"value" json:"value,omitempty"`
+	} `xml:"avg_ct" json:"avgCt,omitempty"`
+	Bytes struct {
+		Name  string `xml:"name" json:"name,omitempty"`
+		Value string `xml:"value" json:"value,omitempty"`
+	} `xml:"bytes" json:"bytes,omitempty"`
+	Rc struct {
+		Param string `xml:"param,attr" json:"param,omitempty"`
+		Name  string `xml:"name" json:"name,omitempty"`
+		Value string `xml:"value" json:"value,omitempty"`
+	} `xml:"rc" json:"rc,omitempty"`
+	Perc []struct {
+		Param string `xml:"param,attr" json:"param,omitempty"`
+		Name  string `xml:"name" json:"name,omitempty"`
+		Value string `xml:"value" json:"value,omitempty"`
+	} `xml:"perc" json:"perc,omitempty"`
 }
 
 type LoadTest struct {
@@ -188,6 +156,7 @@ type Input struct {
 	URL         string
 }
 
+// New creates new load test
 func New(ltInput Input) *LoadTest {
 	configFilePath := "./config.json"
 	resultFilePath := "./result.xml"
@@ -221,18 +190,19 @@ func New(ltInput Input) *LoadTest {
 	return &LoadTest{data: ltData, configFilePath: configFilePath, resultFilePath: resultFilePath}
 }
 
-func (lt LoadTest) Run() (JSONResult, error) {
+// Run runs the load test
+func (lt LoadTest) Run() (Result, error) {
 	err := lt.createConfigFile()
 	if err != nil {
-		return JSONResult{}, err
+		return Result{}, err
 	}
 
 	err = lt.execute()
 	if err != nil {
-		return JSONResult{}, err
+		return Result{}, err
 	}
 
-	return JSONResult{}, nil
+	return lt.getResult()
 }
 
 func (lt LoadTest) execute() error {
@@ -240,8 +210,7 @@ func (lt LoadTest) execute() error {
 		"bzt",
 		lt.configFilePath,
 	)
-	output, err := cmd.Output()
-	fmt.Println(string(output))
+	_, err := cmd.Output()
 	return err
 }
 
@@ -260,5 +229,17 @@ func (lt LoadTest) createConfigFile() error {
 	return nil
 }
 
-func (lt LoadTest) getResult() {
+func (lt LoadTest) getResult() (Result, error) {
+	fd, err := os.Open(lt.resultFilePath)
+	if err != nil {
+		return Result{}, err
+	}
+
+	var xmlRes xmlResult
+	err = xml.NewDecoder(fd).Decode(&xmlRes)
+	if err != nil {
+		return Result{}, err
+	}
+
+	return xmlRes.Group[0], nil
 }

@@ -1,7 +1,5 @@
 import * as cdk from "@aws-cdk/core";
-import * as ecsPatterns from "@aws-cdk/aws-ecs-patterns";
 import * as ecs from "@aws-cdk/aws-ecs";
-import * as ec2 from "@aws-cdk/aws-ec2";
 import * as sfnTasks from "@aws-cdk/aws-stepfunctions-tasks";
 import * as sfn from "@aws-cdk/aws-stepfunctions";
 import * as iam from "@aws-cdk/aws-iam";
@@ -18,6 +16,7 @@ export class LoadTestEngine extends cdk.Construct {
     super(scope, id);
 
     const runLoadTestTask = new sfnTasks.EcsRunTask(this, "runLoadTest", {
+      // Without `WAIT_FOR_TASK_TOKEN` I would not be able to send the response back
       integrationPattern: sfn.IntegrationPattern.WAIT_FOR_TASK_TOKEN,
       cluster: props.cluster,
       taskDefinition: props.taskDefinition,
