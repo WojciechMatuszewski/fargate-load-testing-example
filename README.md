@@ -53,4 +53,7 @@ Inspired by [this AWS solution](https://aws.amazon.com/solutions/implementations
   1. There is no way to transform the request
   2. There is no way to transform the response body (other things like headers and status code are transformable)
 
+- [This PR](https://github.com/aws/aws-cdk/pull/16827/files?diff=unified&w=0) is a great example of how one might create REST API backend by SFNs.
+  I'm still not that familiar with the templates, parameters and similar concepts that go along creating one.
+
 - How is the load spread between containers?

@@ -7,6 +7,7 @@ import * as sfn from "@aws-cdk/aws-stepfunctions";
 import * as iam from "@aws-cdk/aws-iam";
 import * as dynamodb from "@aws-cdk/aws-dynamodb";
 import * as apigwv2 from "@aws-cdk/aws-apigatewayv2";
+import * as apigw from "@aws-cdk/aws-apigateway";
 import { join } from "path";
 
 export class LoadTestAPI extends cdk.Construct {
@@ -38,21 +39,18 @@ export class LoadTestAPI extends cdk.Construct {
       }
     );
 
-    // TODO: Use the REST API version.
-    // The HTTP API is missing to many features to make the API possible.
-
     const APIMachine = new sfn.StateMachine(this, "APIMachine", {
       definition: saveLoadTestDefinitionTask,
       tracingEnabled: true
     });
 
-    const API = new apigwv2.HttpApi(this, "API", {
-      createDefaultStage: true
+    // TODO: Add logging so that we can debug things
+    const API = new apigw.RestApi(this, "API2", {
+      defaultCorsPreflightOptions: {
+        allowOrigins: apigw.Cors.ALL_ORIGINS,
+        allowMethods: apigw.Cors.ALL_METHODS
+      }
     });
-
-    // API.addRoutes({
-    // })
-    //
 
     const APIRole = new iam.Role(this, "APIRole", {
       assumedBy: new iam.ServicePrincipal("apigateway.amazonaws.com"),
@@ -69,32 +67,151 @@ export class LoadTestAPI extends cdk.Construct {
       }
     });
 
-    const APISFNIntegration = new apigwv2.CfnIntegration(
-      this,
-      "APISFNIntegration",
+    const createLoadTestDefinitionAPIResource = API.root.addResource("create");
+    createLoadTestDefinitionAPIResource.addMethod(
+      "POST",
+      new apigw.Integration({
+        type: apigw.IntegrationType.AWS,
+        integrationHttpMethod: "POST",
+        uri: `arn:aws:apigateway:${cdk.Aws.REGION}:states:action/StartExecution`,
+        options: {
+          credentialsRole: APIRole,
+          // requestParameters: {
+          //   Input: "$request.body",
+          //   StateMachineArn: APIMachine.stateMachineArn
+          // },
+          passthroughBehavior: apigw.PassthroughBehavior.NEVER,
+          requestTemplates: {
+            "application/json": `
+              {
+                "input": "{\\"actionType\\": "create", \\"data\\": $util.escapeJavaScript($input.json('$'))}",
+                "stateMachineArn": "${APIMachine.stateMachineArn}"
+              }
+            `
+          },
+          integrationResponses: [
+            {
+              selectionPattern: "4\\d{2}",
+              statusCode: "400",
+              responseTemplates: {
+                "application/json": `{
+                    "error": "Bad input!"
+                  }`
+              }
+            },
+            {
+              selectionPattern: "5\\d{2}",
+              statusCode: "500",
+              responseTemplates: {
+                "application/json": "\"error\": $input.path('$.error')"
+              }
+            },
+            {
+              statusCode: "201",
+              responseTemplates: {
+                "application/json": `{"id": "$context.requestId"}`
+              },
+              responseParameters: {
+                "method.response.header.Access-Control-Allow-Methods":
+                  "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+                "method.response.header.Access-Control-Allow-Headers":
+                  "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
+              }
+            }
+          ]
+        }
+      }),
       {
-        apiId: API.apiId,
-        integrationType: "AWS_PROXY",
-        connectionType: apigwv2.HttpConnectionType.INTERNET,
-        integrationSubtype: "StepFunctions-StartExecution",
-        credentialsArn: APIRole.roleArn,
-        requestParameters: {
-          // Very limited, I cannot use `JSON.stringify` here?
-          Input: "$request.body",
-          StateMachineArn: APIMachine.stateMachineArn
-        },
-        payloadFormatVersion: "1.0"
-        // Supported only by websocket APIS :C
-        // requestTemplates: {},
-        // It is not possible to transform the body of the request?
-        // responseParameters: {}
+        methodResponses: [
+          {
+            statusCode: "201",
+            responseParameters: {
+              "method.response.header.Access-Control-Allow-Origin": true,
+              "method.response.header.Access-Control-Allow-Methods": true,
+              "method.response.header.Access-Control-Allow-Headers": true
+            }
+          }
+        ]
       }
     );
 
-    new apigwv2.CfnRoute(this, "createLoadTestDefinitionRoute", {
-      apiId: API.apiId,
-      routeKey: "POST /create",
-      target: `integrations/${APISFNIntegration.ref}`
-    });
+    // const createLoadTestDefinitionAPIMethod = new apigw.CfnMethod(
+    //   this,
+    //   "createLoadTestDefinitionAPIMethod",
+    //   {
+    //     httpMethod: "POST",
+    //     resourceId: createLoadTestDefinitionAPIResource.resourceId,
+    //     restApiId: API.restApiId,
+    //     integration: {
+    //       connectionType: "INTERNET",
+    //       type: "AWS",
+    //       credentials: APIRole.roleArn,
+    //       requestParameters: {},
+    //       integrationHttpMethod: "POST",
+    //       uri: `arn:aws:apigateway:${cdk.Aws.REGION}:states:action/StartExecution`,
+    //       passthroughBehavior: apigw.PassthroughBehavior.NEVER,
+    //       requestTemplates: {
+    //         "application/json": `{
+    //           "action": "create",
+    //           "definition": "$input.body"
+    //         }`
+    //       },
+    //       integrationResponses: [
+    //         {
+    //           statusCode: "201",
+    //           responseTemplates: {
+    //             "application/json": `{"id": "$context.requestId"}`
+    //           },
+    //           responseParameters: {
+    //             "method.response.header.Access-Control-Allow-Methods":
+    //               "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+    //             "method.response.header.Access-Control-Allow-Headers":
+    //               "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
+    //             "method.response.header.Access-Control-Allow-Origin": "'*'"
+    //           }
+    //         }
+    //       ]
+    //     },
+    //     methodResponses: [
+    //       {
+    //         statusCode: "201",
+    // responseParameters: {
+    // "method.response.header.Access-Control-Allow-Origin": true,
+    // "method.response.header.Access-Control-Allow-Methods": true,
+    // "method.response.header.Access-Control-Allow-Headers": true
+    //         }
+    //       }
+    //     ]
+    //   }
+    // );
+
+    // const APISFNIntegration = new apigwv2.CfnIntegration(
+    //   this,
+    //   "APISFNIntegration",
+    //   {
+    //     apiId: API.apiId,
+    //     integrationType: "AWS_PROXY",
+    //     connectionType: apigwv2.HttpConnectionType.INTERNET,
+    //     integrationSubtype: "StepFunctions-StartExecution",
+    //     credentialsArn: APIRole.roleArn,
+    //     requestParameters: {
+    //       // Very limited, I cannot use `JSON.stringify` here?
+    //       Input: "$request.body",
+    //       StateMachineArn: APIMachine.stateMachineArn
+    //     },
+    //     payloadFormatVersion: "1.0"
+    //     // Supported only by websocket APIS :C
+    //     // requestTemplates: {},
+    //     // It is not possible to transform the body of the request?
+    //     // responseParameters: {}
+    //   }
+    // );
+
+    // new apigwv2.CfnRoute(this, "createLoadTestDefinitionRoute", {
+    //   apiId: API.apiId,
+    //   routeKey: "POST /create",
+    //   target: `integrations/${APISFNIntegration.ref}`
+    // });
   }
 }
