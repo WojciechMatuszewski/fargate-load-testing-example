@@ -8,6 +8,7 @@ import * as iam from "@aws-cdk/aws-iam";
 import * as dynamodb from "@aws-cdk/aws-dynamodb";
 import * as apigwv2 from "@aws-cdk/aws-apigatewayv2";
 import * as apigw from "@aws-cdk/aws-apigateway";
+import * as logs from "@aws-cdk/aws-logs";
 import { join } from "path";
 
 export class LoadTestAPI extends cdk.Construct {
@@ -44,11 +45,20 @@ export class LoadTestAPI extends cdk.Construct {
       tracingEnabled: true
     });
 
-    // TODO: Add logging so that we can debug things
-    const API = new apigw.RestApi(this, "API2", {
+    const API = new apigw.RestApi(this, "API", {
       defaultCorsPreflightOptions: {
         allowOrigins: apigw.Cors.ALL_ORIGINS,
         allowMethods: apigw.Cors.ALL_METHODS
+      },
+      deployOptions: {
+        accessLogFormat: apigw.AccessLogFormat.clf(),
+        tracingEnabled: true,
+        loggingLevel: apigw.MethodLoggingLevel.INFO,
+        accessLogDestination: new apigw.LogGroupLogDestination(
+          new logs.LogGroup(this, "APIAccessLogs", {
+            retention: logs.RetentionDays.ONE_DAY
+          })
+        )
       }
     });
 
@@ -76,18 +86,13 @@ export class LoadTestAPI extends cdk.Construct {
         uri: `arn:aws:apigateway:${cdk.Aws.REGION}:states:action/StartExecution`,
         options: {
           credentialsRole: APIRole,
-          // requestParameters: {
-          //   Input: "$request.body",
-          //   StateMachineArn: APIMachine.stateMachineArn
-          // },
           passthroughBehavior: apigw.PassthroughBehavior.NEVER,
+          // Mind the difference between this definition and the one in HTTP APIs.
           requestTemplates: {
-            "application/json": `
-              {
-                "input": "{\\"actionType\\": "create", \\"data\\": $util.escapeJavaScript($input.json('$'))}",
+            "application/json": `{
+                "input": "{\\"actionType\\": \\"create\\", \\"definition\\": $util.escapeJavaScript($input.json('$'))}",
                 "stateMachineArn": "${APIMachine.stateMachineArn}"
-              }
-            `
+              }`
           },
           integrationResponses: [
             {
@@ -95,18 +100,35 @@ export class LoadTestAPI extends cdk.Construct {
               statusCode: "400",
               responseTemplates: {
                 "application/json": `{
-                    "error": "Bad input!"
+                    "message": "Malformed input"
                   }`
+              },
+              responseParameters: {
+                "method.response.header.Access-Control-Allow-Methods":
+                  "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+                "method.response.header.Access-Control-Allow-Headers":
+                  "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
               }
             },
             {
               selectionPattern: "5\\d{2}",
               statusCode: "500",
               responseTemplates: {
-                "application/json": "\"error\": $input.path('$.error')"
+                "application/json": `{
+                  "message": "$input.path('$.errorMessage')"
+                }`
+              },
+              responseParameters: {
+                "method.response.header.Access-Control-Allow-Methods":
+                  "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+                "method.response.header.Access-Control-Allow-Headers":
+                  "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
               }
             },
             {
+              selectionPattern: "2\\d{2}",
               statusCode: "201",
               responseTemplates: {
                 "application/json": `{"id": "$context.requestId"}`
@@ -131,87 +153,31 @@ export class LoadTestAPI extends cdk.Construct {
               "method.response.header.Access-Control-Allow-Methods": true,
               "method.response.header.Access-Control-Allow-Headers": true
             }
+          },
+          {
+            statusCode: "400",
+            responseModels: {
+              "application/json": apigw.Model.ERROR_MODEL
+            },
+            responseParameters: {
+              "method.response.header.Access-Control-Allow-Origin": true,
+              "method.response.header.Access-Control-Allow-Methods": true,
+              "method.response.header.Access-Control-Allow-Headers": true
+            }
+          },
+          {
+            statusCode: "500",
+            responseModels: {
+              "application/json": apigw.Model.ERROR_MODEL
+            },
+            responseParameters: {
+              "method.response.header.Access-Control-Allow-Origin": true,
+              "method.response.header.Access-Control-Allow-Methods": true,
+              "method.response.header.Access-Control-Allow-Headers": true
+            }
           }
         ]
       }
     );
-
-    // const createLoadTestDefinitionAPIMethod = new apigw.CfnMethod(
-    //   this,
-    //   "createLoadTestDefinitionAPIMethod",
-    //   {
-    //     httpMethod: "POST",
-    //     resourceId: createLoadTestDefinitionAPIResource.resourceId,
-    //     restApiId: API.restApiId,
-    //     integration: {
-    //       connectionType: "INTERNET",
-    //       type: "AWS",
-    //       credentials: APIRole.roleArn,
-    //       requestParameters: {},
-    //       integrationHttpMethod: "POST",
-    //       uri: `arn:aws:apigateway:${cdk.Aws.REGION}:states:action/StartExecution`,
-    //       passthroughBehavior: apigw.PassthroughBehavior.NEVER,
-    //       requestTemplates: {
-    //         "application/json": `{
-    //           "action": "create",
-    //           "definition": "$input.body"
-    //         }`
-    //       },
-    //       integrationResponses: [
-    //         {
-    //           statusCode: "201",
-    //           responseTemplates: {
-    //             "application/json": `{"id": "$context.requestId"}`
-    //           },
-    //           responseParameters: {
-    //             "method.response.header.Access-Control-Allow-Methods":
-    //               "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
-    //             "method.response.header.Access-Control-Allow-Headers":
-    //               "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'",
-    //             "method.response.header.Access-Control-Allow-Origin": "'*'"
-    //           }
-    //         }
-    //       ]
-    //     },
-    //     methodResponses: [
-    //       {
-    //         statusCode: "201",
-    // responseParameters: {
-    // "method.response.header.Access-Control-Allow-Origin": true,
-    // "method.response.header.Access-Control-Allow-Methods": true,
-    // "method.response.header.Access-Control-Allow-Headers": true
-    //         }
-    //       }
-    //     ]
-    //   }
-    // );
-
-    // const APISFNIntegration = new apigwv2.CfnIntegration(
-    //   this,
-    //   "APISFNIntegration",
-    //   {
-    //     apiId: API.apiId,
-    //     integrationType: "AWS_PROXY",
-    //     connectionType: apigwv2.HttpConnectionType.INTERNET,
-    //     integrationSubtype: "StepFunctions-StartExecution",
-    //     credentialsArn: APIRole.roleArn,
-    //     requestParameters: {
-    //       // Very limited, I cannot use `JSON.stringify` here?
-    //       Input: "$request.body",
-    //       StateMachineArn: APIMachine.stateMachineArn
-    //     },
-    //     payloadFormatVersion: "1.0"
-    //     // Supported only by websocket APIS :C
-    //     // requestTemplates: {},
-    //     // It is not possible to transform the body of the request?
-    //     // responseParameters: {}
-    //   }
-    // );
-
-    // new apigwv2.CfnRoute(this, "createLoadTestDefinitionRoute", {
-    //   apiId: API.apiId,
-    //   routeKey: "POST /create",
-    //   target: `integrations/${APISFNIntegration.ref}`
-    // });
   }
 }

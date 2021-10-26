@@ -56,4 +56,8 @@ Inspired by [this AWS solution](https://aws.amazon.com/solutions/implementations
 - [This PR](https://github.com/aws/aws-cdk/pull/16827/files?diff=unified&w=0) is a great example of how one might create REST API backend by SFNs.
   I'm still not that familiar with the templates, parameters and similar concepts that go along creating one.
 
+- It seems to me like the APIGW REST APIs `requestParameters` differ greatly from the HTTP APIs `requestParameters`.
+  - The [documentation](https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-swagger-extensions-integration-requestParameters.html) clearly states the difference
+    - The APIGW REST APIs `requestParameters` specify the mapping between _method request parameters_ to _integration request parameters_.
+    - The HTTP APIs `requestParameters` specify the parameters that will be passed directly to the integration. No "mapping" occurs.
 - How is the load spread between containers?
