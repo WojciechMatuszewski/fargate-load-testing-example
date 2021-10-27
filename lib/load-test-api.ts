@@ -1,15 +1,10 @@
-import * as cdk from "@aws-cdk/core";
-import * as ecsPatterns from "@aws-cdk/aws-ecs-patterns";
-import * as ecs from "@aws-cdk/aws-ecs";
-import * as ec2 from "@aws-cdk/aws-ec2";
-import * as sfnTasks from "@aws-cdk/aws-stepfunctions-tasks";
-import * as sfn from "@aws-cdk/aws-stepfunctions";
-import * as iam from "@aws-cdk/aws-iam";
-import * as dynamodb from "@aws-cdk/aws-dynamodb";
-import * as apigwv2 from "@aws-cdk/aws-apigatewayv2";
 import * as apigw from "@aws-cdk/aws-apigateway";
+import * as dynamodb from "@aws-cdk/aws-dynamodb";
+import * as iam from "@aws-cdk/aws-iam";
 import * as logs from "@aws-cdk/aws-logs";
-import { join } from "path";
+import * as sfn from "@aws-cdk/aws-stepfunctions";
+import * as sfnTasks from "@aws-cdk/aws-stepfunctions-tasks";
+import * as cdk from "@aws-cdk/core";
 
 export class LoadTestAPI extends cdk.Construct {
   constructor(scope: cdk.Construct, id: string) {
@@ -29,14 +24,15 @@ export class LoadTestAPI extends cdk.Construct {
       {
         item: {
           pk: sfnTasks.DynamoAttributeValue.fromString(
-            sfn.JsonPath.stringAt("$$.Execution.Id")
+            sfn.JsonPath.stringAt("$$.Execution.Name")
           ),
           status: sfnTasks.DynamoAttributeValue.fromString("SCHEDULED"),
           definition: sfnTasks.DynamoAttributeValue.fromString(
-            sfn.JsonPath.stringAt("$.definition")
+            sfn.JsonPath.stringAt("States.JsonToString($.definition)")
           )
         },
-        table: dataTable
+        table: dataTable,
+        resultPath: sfn.JsonPath.DISCARD
       }
     );
 
@@ -78,22 +74,147 @@ export class LoadTestAPI extends cdk.Construct {
     });
 
     const createLoadTestDefinitionAPIResource = API.root.addResource("create");
-    createLoadTestDefinitionAPIResource.addMethod(
-      "POST",
-      new apigw.Integration({
+    const loadTestDefinitionModel = new apigw.Model(
+      this,
+      "loadTestDefinitionModel",
+      {
+        restApi: API,
+        schema: {
+          type: apigw.JsonSchemaType.OBJECT,
+          properties: {
+            concurrency: {
+              type: apigw.JsonSchemaType.NUMBER,
+              minimum: 1
+            },
+            holdFor: {
+              type: apigw.JsonSchemaType.STRING
+            },
+            rampUp: {
+              type: apigw.JsonSchemaType.STRING
+            },
+            method: {
+              type: apigw.JsonSchemaType.STRING,
+              enum: ["GET"]
+            },
+            url: {
+              type: apigw.JsonSchemaType.STRING
+            }
+          },
+          required: ["concurrency", "holdFor", "rampUp", "method", "url"]
+        },
+        contentType: "application/json"
+      }
+    );
+
+    new SFNIntegrationMethod(this, "createLoadTest", {
+      requestTemplates: {
+        "application/json": `{
+          "input": "{\\"actionType\\": \\"create\\", \\"definition\\": $util.escapeJavaScript($input.json('$'))}",
+          "stateMachineArn": "${APIMachine.stateMachineArn}"
+        }`
+      },
+      responseTemplates: {
+        "application/json": `{"id": "$context.requestId"}`
+      },
+      credentialsRole: APIRole,
+      resource: createLoadTestDefinitionAPIResource,
+      requestModels: {
+        "application/json": loadTestDefinitionModel
+      },
+      requestValidator: new apigw.RequestValidator(
+        this,
+        "createLoadTestValidator",
+        {
+          restApi: API,
+          validateRequestBody: true
+        }
+      )
+    });
+
+    // new SFNIntegrationMethod(this, "getLoadTest", {
+    //   requestTemplates: {
+    //     "application/json": `{
+    //       "input": "{\\"actionType\\": \\"create\\", \\"definition\\": $util.escapeJavaScript($input.json('$'))}",
+    //       "stateMachineArn": "${APIMachine.stateMachineArn}"
+    //     }`
+    //   },
+    //   responseTemplates: {},
+    //   credentialsRole: APIRole,
+    //   resource: createLoadTestDefinitionAPIResource
+    // });
+  }
+}
+
+interface SFNIntegrationProps {
+  requestTemplates: apigw.IntegrationOptions["requestTemplates"];
+  responseTemplates: apigw.IntegrationResponse["responseTemplates"];
+  credentialsRole: iam.IRole;
+  resource: apigw.IResource;
+  requestModels?: apigw.MethodOptions["requestModels"];
+  requestValidator?: apigw.MethodOptions["requestValidator"];
+}
+
+class SFNIntegrationMethod extends apigw.Method {
+  constructor(
+    scope: cdk.Construct,
+    id: string,
+    {
+      requestTemplates,
+      responseTemplates,
+      credentialsRole,
+      resource,
+      requestModels,
+      requestValidator
+    }: SFNIntegrationProps
+  ) {
+    super(scope, id, {
+      httpMethod: "POST",
+      resource,
+      options: {
+        requestModels,
+        requestValidator,
+        methodResponses: [
+          {
+            statusCode: "201",
+            responseParameters: {
+              "method.response.header.Access-Control-Allow-Origin": true,
+              "method.response.header.Access-Control-Allow-Methods": true,
+              "method.response.header.Access-Control-Allow-Headers": true
+            }
+          },
+          {
+            statusCode: "400",
+            responseModels: {
+              "application/json": apigw.Model.ERROR_MODEL
+            },
+            responseParameters: {
+              "method.response.header.Access-Control-Allow-Origin": true,
+              "method.response.header.Access-Control-Allow-Methods": true,
+              "method.response.header.Access-Control-Allow-Headers": true
+            }
+          },
+          {
+            statusCode: "500",
+            responseModels: {
+              "application/json": apigw.Model.ERROR_MODEL
+            },
+            responseParameters: {
+              "method.response.header.Access-Control-Allow-Origin": true,
+              "method.response.header.Access-Control-Allow-Methods": true,
+              "method.response.header.Access-Control-Allow-Headers": true
+            }
+          }
+        ]
+      },
+      integration: new apigw.Integration({
         type: apigw.IntegrationType.AWS,
         integrationHttpMethod: "POST",
         uri: `arn:aws:apigateway:${cdk.Aws.REGION}:states:action/StartExecution`,
         options: {
-          credentialsRole: APIRole,
+          credentialsRole,
           passthroughBehavior: apigw.PassthroughBehavior.NEVER,
           // Mind the difference between this definition and the one in HTTP APIs.
-          requestTemplates: {
-            "application/json": `{
-                "input": "{\\"actionType\\": \\"create\\", \\"definition\\": $util.escapeJavaScript($input.json('$'))}",
-                "stateMachineArn": "${APIMachine.stateMachineArn}"
-              }`
-          },
+          requestTemplates,
           integrationResponses: [
             {
               selectionPattern: "4\\d{2}",
@@ -130,9 +251,7 @@ export class LoadTestAPI extends cdk.Construct {
             {
               selectionPattern: "2\\d{2}",
               statusCode: "201",
-              responseTemplates: {
-                "application/json": `{"id": "$context.requestId"}`
-              },
+              responseTemplates: responseTemplates,
               responseParameters: {
                 "method.response.header.Access-Control-Allow-Methods":
                   "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
@@ -143,41 +262,7 @@ export class LoadTestAPI extends cdk.Construct {
             }
           ]
         }
-      }),
-      {
-        methodResponses: [
-          {
-            statusCode: "201",
-            responseParameters: {
-              "method.response.header.Access-Control-Allow-Origin": true,
-              "method.response.header.Access-Control-Allow-Methods": true,
-              "method.response.header.Access-Control-Allow-Headers": true
-            }
-          },
-          {
-            statusCode: "400",
-            responseModels: {
-              "application/json": apigw.Model.ERROR_MODEL
-            },
-            responseParameters: {
-              "method.response.header.Access-Control-Allow-Origin": true,
-              "method.response.header.Access-Control-Allow-Methods": true,
-              "method.response.header.Access-Control-Allow-Headers": true
-            }
-          },
-          {
-            statusCode: "500",
-            responseModels: {
-              "application/json": apigw.Model.ERROR_MODEL
-            },
-            responseParameters: {
-              "method.response.header.Access-Control-Allow-Origin": true,
-              "method.response.header.Access-Control-Allow-Methods": true,
-              "method.response.header.Access-Control-Allow-Headers": true
-            }
-          }
-        ]
-      }
-    );
+      })
+    });
   }
 }
